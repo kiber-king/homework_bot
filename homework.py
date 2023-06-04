@@ -31,10 +31,13 @@ logger = logging.getLogger(__name__)
 
 def check_tokens():
     """Проверяет доступность переменных окружения."""
-    tokens = all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID])
-    if not tokens:
-        logger.critical('Отсутствуют токены')
-    return tokens
+    tokens = ['PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID']
+    flag = True
+    for token_name in tokens:
+        if not globals()[token_name]:
+            logger.critical(f'Отсутствует токен{token_name}')
+            flag = False
+    return flag
 
 
 def send_message(bot, message):
@@ -42,7 +45,7 @@ def send_message(bot, message):
     try:
         logger.debug(f'bot отправляет сообщение {message}')
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-    except Exception as error:
+    except telegram.error.TelegramError as error:
         logger.error(f'Не удалось отправить сообщение. Ошибка {error}')
 
 
@@ -51,13 +54,9 @@ def get_api_answer(timestamp):
     payload = {'from_date': timestamp}
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=payload)
-    except Exception as error:
-        message = f'Ошибка при запросе к эндпоинту: {error}'
-        logger.error(message)
-        raise KeyError(message)
+    except requests.RequestException as error:
+        raise ConnectionError(f'Ошибка при запросе к эндпоинту: {error}')
     if response.status_code != HTTPStatus.OK:
-        error = f'API домашки возвращает код: {response.status_code}'
-        logger.error(error)
         raise exception.HttpException(response)
     return response.json()
 
@@ -65,21 +64,13 @@ def get_api_answer(timestamp):
 def check_response(response):
     """Проверяет ответ API на соответствие документации."""
     if not response:
-        error = 'Пустой словарь'
-        logger.error(error)
-        raise KeyError
+        raise KeyError('Пустой словарь')
     elif not isinstance(response, dict):
-        error = 'response не является словарём'
-        logger.error(error)
-        raise TypeError
+        raise TypeError('response не является словарём')
     elif 'homeworks' not in response:
-        error = 'Нет ожидаемого ключа'
-        logger.error(error)
-        raise KeyError
+        raise KeyError('Нет ожидаемого ключа')
     elif not isinstance(response.get('homeworks'), list):
-        error = 'Тип данных ответа не является списком'
-        logger.error(error)
-        raise TypeError
+        raise TypeError('Тип данных ответа не является списком')
     return response.get('homeworks')
 
 
@@ -88,13 +79,9 @@ def parse_status(homework):
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
     if homework_status not in HOMEWORK_VERDICTS.keys():
-        error = 'Неопределённый статус работы'
-        logger.error(error)
-        raise KeyError(error)
+        raise KeyError('Неопределённый статус работы')
     elif not homework_name:
-        error = 'Нет имени дз'
-        logger.error(error)
-        raise KeyError(error)
+        raise KeyError('Нет имени дз')
     verdict = HOMEWORK_VERDICTS[homework_status]
 
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
@@ -119,7 +106,7 @@ def main():
                     message = parse_status(homework)
                     if send_info['homework'] != message:
                         send_message(bot, message)
-                        send_info[homework] = message
+                        send_info['homework'] = message
             else:
                 logger.debug('Новые статусы дз отсутствуют')
             timestamp = response.get('current_date')
@@ -139,4 +126,3 @@ if __name__ == '__main__':
         format='%(asctime)s - %(levelname) - %(name) - %(message)',
         stream=sys.stdout
     )
-    main()
