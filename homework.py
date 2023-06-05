@@ -46,7 +46,7 @@ def send_message(bot, message):
         logger.debug(f'bot отправляет сообщение {message}')
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
     except telegram.error.TelegramError as error:
-        logger.error(f'Не удалось отправить сообщение. Ошибка {error}')
+        raise telegram.error.TelegramError(error)
 
 
 def get_api_answer(timestamp):
@@ -55,7 +55,9 @@ def get_api_answer(timestamp):
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=payload)
     except requests.RequestException as error:
-        raise ConnectionError(f'Ошибка при запросе к эндпоинту: {error}')
+        raise ConnectionError(f'При запросе к эндпоинту: {ENDPOINT}'
+                              f'с хэдерами {HEADERS} и параметрами {payload}'
+                              f'возникла ошибка: {error}.')
     if response.status_code != HTTPStatus.OK:
         raise exception.HttpException(response)
     return response.json()
